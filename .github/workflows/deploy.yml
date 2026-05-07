@@ -24,8 +24,6 @@ jobs:
       - run: npx vite build
         env:
           VITE_TIMELINE_CSV_URL: ${{ secrets.TIMELINE_CSV_URL }}
-          VITE_STATS_CSV_URL: ${{ secrets.STATS_CSV_URL }}
-          VITE_META_CSV_URL: ${{ secrets.META_CSV_URL }}
 
       - uses: peaceiris/actions-gh-pages@v4
         with:

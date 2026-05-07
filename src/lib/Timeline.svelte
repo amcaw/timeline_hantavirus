@@ -1,12 +1,26 @@
 <script>
     import { onMount } from 'svelte';
     import { initPym, sendHeight } from './pym.js';
+    import headerWebp from './assets/header.webp';
+    import headerJpg from './assets/header.jpg';
+
+    const headerBgStyle = `background-image: url('${headerJpg}'); background-image: image-set(url('${headerWebp}') type('image/webp'), url('${headerJpg}') type('image/jpeg'));`;
 
     initPym();
 
     const CSV_URL = import.meta.env.VITE_TIMELINE_CSV_URL;
-    const STATS_CSV_URL = import.meta.env.VITE_STATS_CSV_URL;
-    const META_CSV_URL = import.meta.env.VITE_META_CSV_URL;
+
+    // Stats and Meta tabs live in the same published spreadsheet — swap the
+    // gid query param so we only need one secret. If a different doc is ever
+    // used, derived URLs fall back to undefined and their UI hides.
+    const STATS_GID = '1860557328';
+    const META_GID = '1579613166';
+    function withGid(url, gid) {
+        if (!url) return null;
+        return url.replace(/([?&])gid=\d+/, `$1gid=${gid}`);
+    }
+    const STATS_CSV_URL = withGid(CSV_URL, STATS_GID);
+    const META_CSV_URL = withGid(CSV_URL, META_GID);
 
     let events = $state([]);
     let stats = $state([]);
@@ -210,7 +224,7 @@
 <div id="my-timeline-container">
     <div class="tl-wrap">
         <div class="tl-header">
-            <div class="tl-header-bg"></div>
+            <div class="tl-header-bg" style={headerBgStyle}></div>
             <div class="tl-header-content">
                 <h1 class="tl-title">Hantavirus sur le <em>Hondius</em> : Comment le virus s'est transmis d'humain à humain</h1>
             </div>
