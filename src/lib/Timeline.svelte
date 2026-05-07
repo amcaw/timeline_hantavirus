@@ -5,8 +5,12 @@
     initPym();
 
     const CSV_URL = import.meta.env.VITE_TIMELINE_CSV_URL;
+    const STATS_CSV_URL = import.meta.env.VITE_STATS_CSV_URL;
+    const META_CSV_URL = import.meta.env.VITE_META_CSV_URL;
 
     let events = $state([]);
+    let stats = $state([]);
+    let lastUpdated = $state('');
     let loading = $state(true);
     let error = $state(null);
     let openCards = $state(new Set());
@@ -149,12 +153,23 @@
         return groups;
     });
 
+    async function fetchCSV(url) {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return parseCSV(await res.text());
+    }
+
     onMount(async () => {
         try {
-            const res = await fetch(CSV_URL);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const text = await res.text();
-            events = parseCSV(text);
+            const [eventsRows, statsRows, metaRows] = await Promise.all([
+                fetchCSV(CSV_URL),
+                STATS_CSV_URL ? fetchCSV(STATS_CSV_URL) : Promise.resolve([]),
+                META_CSV_URL ? fetchCSV(META_CSV_URL) : Promise.resolve([])
+            ]);
+            events = eventsRows;
+            stats = statsRows;
+            const updatedRow = metaRows.find(r => (r.Key || '').toLowerCase() === 'last_updated');
+            if (updatedRow) lastUpdated = updatedRow.Value || '';
         } catch (e) {
             error = e.message;
         } finally {
@@ -201,11 +216,16 @@
             </div>
         </div>
 
-        <div class="tl-stats">
-            <div class="tl-stat-item"><span class="tl-stat-val">147</span><span class="tl-stat-lab">Personnes à bord</span></div>
-            <div class="tl-stat-item"><span class="tl-stat-val">23</span><span class="tl-stat-lab">Nationalités</span></div>
-            <div class="tl-stat-item item-red"><span class="tl-stat-val">3</span><span class="tl-stat-lab">Décès</span></div>
-        </div>
+        {#if stats.length > 0}
+            <div class="tl-stats">
+                {#each stats as s, i}
+                    <div class="tl-stat-item {i === stats.length - 1 ? 'item-red' : ''}">
+                        <span class="tl-stat-val">{s.Total || ''}</span>
+                        <span class="tl-stat-lab">{s.Label || ''}</span>
+                    </div>
+                {/each}
+            </div>
+        {/if}
 
         <div class="tl-controls">
             <div class="tl-control-row">
@@ -316,7 +336,9 @@
 
         <div class="tl-footer">
             <span>Sources : OMS · Min. Santé (Argentine, SA)</span>
-            <span>Dernière mise à jour : 6 mai 2026</span>
+            {#if lastUpdated}
+                <span>Dernière mise à jour : {lastUpdated}</span>
+            {/if}
         </div>
     </div>
 </div>
