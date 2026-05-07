@@ -2,7 +2,7 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
-const base = process.env.BASE_PATH ? `/${process.env.BASE_PATH}/` : '/svelte_timeline_hantavirus/';
+const base = process.env.BASE_PATH ? `/${process.env.BASE_PATH}/` : '/timeline_hantavirus/';
 
 export default defineConfig({
     plugins: [svelte()],
