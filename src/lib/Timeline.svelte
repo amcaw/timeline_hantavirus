@@ -11,6 +11,31 @@
     let error = $state(null);
     let openCards = $state(new Set());
 
+    const ALL_TYPES = ['departure', 'death', 'case', 'discovery', 'action'];
+    const TYPE_LABELS = {
+        departure: 'Embarquement / Navigation',
+        death: 'Décès',
+        case: 'Cas confirmés / suspects',
+        discovery: 'Identification souche',
+        action: 'Actions / Évacuation'
+    };
+
+    let activeTypes = $state(new Set(ALL_TYPES));
+    let sortOrder = $state('chrono'); // 'chrono' | 'recent'
+
+    function toggleType(type) {
+        const next = new Set(activeTypes);
+        if (next.has(type)) next.delete(type);
+        else next.add(type);
+        activeTypes = next;
+        setTimeout(() => sendHeight(), 60);
+    }
+
+    function setSort(order) {
+        sortOrder = order;
+        setTimeout(() => sendHeight(), 60);
+    }
+
     function parseCSV(text) {
         const lines = text.split(/\r?\n/).filter(l => l.trim());
         if (lines.length === 0) return [];
@@ -88,25 +113,38 @@
     }
 
     let groupedEvents = $derived.by(() => {
-        const groups = [];
-        let currentLabel = null;
-        let currentList = null;
-        for (const ev of events) {
+        const filtered = events.filter(ev => {
+            const t = (ev.Type || '').toLowerCase();
+            return activeTypes.has(t);
+        });
+
+        const enrichedList = filtered.map(ev => {
             const start = parseDate(ev.Start_date);
             const end = parseDate(ev.End_date);
-            const label = start ? `${MONTHS_FR[start.month - 1]} ${start.year}` : '';
             const display = buildDateDisplay(start, end);
-            const enriched = {
+            const sortKey = start ? start.year * 10000 + start.month * 100 + start.day : 0;
+            return {
                 ...ev,
+                _start: start,
+                _sortKey: sortKey,
                 _dayDisplay: display.day,
                 _monthDisplay: display.month
             };
+        });
+
+        enrichedList.sort((a, b) => sortOrder === 'recent' ? b._sortKey - a._sortKey : a._sortKey - b._sortKey);
+
+        const groups = [];
+        let currentLabel = null;
+        let currentList = null;
+        for (const ev of enrichedList) {
+            const label = ev._start ? `${MONTHS_FR[ev._start.month - 1]} ${ev._start.year}` : '';
             if (label !== currentLabel) {
                 currentLabel = label;
                 currentList = [];
                 groups.push({ label, items: currentList });
             }
-            currentList.push(enriched);
+            currentList.push(ev);
         }
         return groups;
     });
@@ -169,21 +207,51 @@
             <div class="tl-stat-item item-red"><span class="tl-stat-val">3</span><span class="tl-stat-lab">Décès</span></div>
         </div>
 
-        <div class="tl-legend">
-            <div class="tl-leg-item"><div class="tl-dot dot-departure"></div> Embarquement / Navigation</div>
-            <div class="tl-leg-item"><div class="tl-dot dot-death"></div> Décès</div>
-            <div class="tl-leg-item"><div class="tl-dot dot-case"></div> Cas confirmés / suspects</div>
-            <div class="tl-leg-item"><div class="tl-dot dot-discovery"></div> Identification souche</div>
-            <div class="tl-leg-item"><div class="tl-dot dot-action"></div> Actions / Évacuation</div>
+        <div class="tl-controls">
+            <div class="tl-control-row">
+                <span class="tl-control-label">Filtrer les catégories&nbsp;:</span>
+                <div class="tl-legend">
+                    {#each ALL_TYPES as t}
+                        <button
+                            type="button"
+                            class="tl-leg-item {activeTypes.has(t) ? 'active' : 'inactive'}"
+                            onclick={() => toggleType(t)}
+                            aria-pressed={activeTypes.has(t)}
+                        >
+                            <div class="tl-dot {dotClass(t)}"></div>
+                            {TYPE_LABELS[t]}
+                        </button>
+                    {/each}
+                </div>
+            </div>
+            <div class="tl-control-row">
+                <span class="tl-control-label">Trier&nbsp;:</span>
+                <div class="tl-sort">
+                    <button
+                        type="button"
+                        class="tl-sort-btn {sortOrder === 'chrono' ? 'active' : ''}"
+                        onclick={() => setSort('chrono')}
+                        aria-pressed={sortOrder === 'chrono'}
+                    >Chronologique</button>
+                    <button
+                        type="button"
+                        class="tl-sort-btn {sortOrder === 'recent' ? 'active' : ''}"
+                        onclick={() => setSort('recent')}
+                        aria-pressed={sortOrder === 'recent'}
+                    >Le plus récent en premier</button>
+                </div>
+            </div>
         </div>
 
         {#if loading}
-            <div class="loader">
-                <div class="loader-dots"><span></span><span></span><span></span></div>
+            <div class="tl-loader">
+                <div class="tl-loader-dots"><span></span><span></span><span></span></div>
                 <p>Chargement de la timeline</p>
             </div>
         {:else if error}
-            <p class="state-msg error">Erreur : {error}</p>
+            <p class="tl-state-msg error">Erreur : {error}</p>
+        {:else if groupedEvents.length === 0}
+            <p class="tl-state-msg">Aucun événement à afficher. Activez au moins une catégorie ci-dessus.</p>
         {:else}
             <div class="tl-body">
                 <div class="tl-timeline">
@@ -194,11 +262,11 @@
                                 <div class="tl-month-line"></div>
                             </div>
                         {/if}
-                        {#each group.items as ev, i (group.label + '-' + i)}
-                            {@const key = group.label + '-' + i}
+                        {#each group.items as ev, i (ev.Title + '|' + ev.Start_date + '|' + i)}
+                            {@const key = ev.Title + '|' + ev.Start_date}
                             {@const open = openCards.has(key)}
                             <div class="tl-event">
-                                <div class="tl-event-date" class:tl-event-date-wide={!ev._monthDisplay}>
+                                <div class="tl-event-date {!ev._monthDisplay ? 'tl-event-date-wide' : ''}">
                                     <span class="date-day">{@html ev._dayDisplay}</span>
                                     {#if ev._monthDisplay}
                                         <span class="date-month">{ev._monthDisplay}</span>
@@ -210,8 +278,7 @@
                                 <div class="tl-event-content">
                                     <div class="tl-connector"></div>
                                     <div
-                                        class="tl-card"
-                                        class:open
+                                        class="tl-card {open ? 'open' : ''}"
                                         onclick={() => toggleCard(key)}
                                         onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCard(key); } }}
                                         role="button"
@@ -253,480 +320,3 @@
         </div>
     </div>
 </div>
-
-<style>
-    #my-timeline-container {
-        --bg: #ffffff;
-        --bg-card: #ffffff;
-        --bg-subtle: #f5f5f5;
-        --bg-alert: #fff5f4;
-        --border: #e0e0e0;
-        --border-card: #e8e8e8;
-        --text-primary: #111111;
-        --text-secondary: #444444;
-        --text-muted: #888888;
-        --spine: #d8d8d8;
-        --red: #c0392b;
-        --red-dark: #8b1a10;
-        --red-light: #fde8e6;
-        --red-border: #e8b4ae;
-        --amber: #b45309;
-        --amber-light: #fef3cd;
-        --blue: #1e4a7a;
-        --blue-light: #e8f0f9;
-        --green: #1a6640;
-        --green-light: #e4f5ec;
-        --shadow-card: 0 1px 4px rgba(0,0,0,0.06);
-        --shadow-hover: 0 4px 18px rgba(0,0,0,0.11);
-
-        display: block;
-        font-family: 'Montserrat', sans-serif;
-        font-size: 14px;
-        line-height: 1.6;
-        color: var(--text-primary);
-        background: var(--bg);
-        max-width: 860px;
-        margin: 0 auto;
-    }
-
-    @media (prefers-color-scheme: dark) {
-        #my-timeline-container {
-            --bg: #111111;
-            --bg-card: #1c1c1c;
-            --bg-subtle: #1f1f1f;
-            --bg-alert: #2a1514;
-            --border: #2e2e2e;
-            --border-card: #2e2e2e;
-            --text-primary: #f0f0f0;
-            --text-secondary: #b0b0b0;
-            --text-muted: #666666;
-            --spine: #333333;
-            --red: #e05c4e;
-            --red-dark: #f08070;
-            --red-light: #2a1514;
-            --red-border: #5a2520;
-            --amber: #e8a040;
-            --amber-light: #2a2010;
-            --blue: #6ea8de;
-            --blue-light: #0f1e30;
-            --green: #4caf7d;
-            --green-light: #0d2218;
-        }
-    }
-
-    #my-timeline-container :global(*),
-    #my-timeline-container :global(*::before),
-    #my-timeline-container :global(*::after) {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-        font-family: 'Montserrat', sans-serif;
-    }
-
-    .tl-wrap {
-        width: 100%;
-        max-width: 860px;
-        margin: 0 auto;
-        padding: 0 0 48px;
-    }
-
-    .tl-header {
-        position: relative;
-        overflow: hidden;
-        padding: 52px 28px 40px;
-        min-height: 340px;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-end;
-    }
-
-    .tl-header-bg {
-        position: absolute;
-        inset: 0;
-        background-image: url('https://static-content.rtbf.be/uploader/image/8/6/4/beta_d2c1138aa13ed9c36611afdcb59d00bb.jpg');
-        background-size: cover;
-        background-position: center;
-        filter: saturate(0.8);
-        opacity: 0.4;
-        z-index: 0;
-    }
-
-    .tl-header-content {
-        position: relative;
-        z-index: 1;
-    }
-
-    .tl-eyebrow {
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        color: var(--red);
-        letter-spacing: 0.1em;
-        margin-bottom: 8px;
-    }
-
-    .tl-title {
-        font-size: 28px;
-        font-weight: 800;
-        line-height: 1.2;
-        letter-spacing: -0.02em;
-    }
-
-    .tl-virus-banner {
-        display: block;
-        width: 100%;
-        height: 200px;
-        overflow: hidden;
-        position: relative;
-        margin-bottom: 15px;
-        border-radius: 6px;
-    }
-
-    .tl-virus-banner-img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-
-    .tl-virus-banner-overlay {
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.4));
-    }
-
-    .tl-virus-caption {
-        position: absolute;
-        bottom: 8px;
-        right: 12px;
-        font-size: 10px;
-        color: #fff;
-        opacity: 0.8;
-    }
-
-    .tl-stats {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        padding: 0 28px;
-        margin-top: -24px;
-        position: relative;
-        z-index: 10;
-    }
-
-    .tl-stat-item {
-        flex: 1;
-        min-width: 140px;
-        background: var(--bg-card);
-        padding: 16px;
-        border-radius: 12px;
-        border: 1px solid var(--border-card);
-        box-shadow: var(--shadow-card);
-    }
-
-    .tl-stat-val {
-        font-size: 24px;
-        font-weight: 800;
-        display: block;
-        color: var(--text-primary);
-        line-height: 1;
-    }
-
-    .tl-stat-lab {
-        font-size: 10px;
-        font-weight: 600;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        margin-top: 4px;
-        display: block;
-    }
-
-    .item-red .tl-stat-val {
-        color: var(--red);
-    }
-
-    .tl-legend {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 15px;
-        padding: 24px 28px;
-        font-size: 11px;
-        font-weight: 600;
-        color: var(--text-secondary);
-    }
-
-    .tl-leg-item {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-
-    .tl-body {
-        padding: 0 10px;
-    }
-
-    .tl-month {
-        padding: 32px 0 16px 28px;
-        position: relative;
-        display: flex;
-        align-items: center;
-    }
-
-    .tl-month-label {
-        font-size: 13px;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: var(--text-muted);
-    }
-
-    .tl-month-line {
-        flex: 1;
-        height: 1px;
-        background: var(--border);
-        margin-left: 12px;
-    }
-
-    .tl-timeline {
-        position: relative;
-    }
-
-    .tl-event {
-        display: flex;
-        opacity: 1;
-        transform: none;
-        margin-bottom: 10px;
-    }
-
-    .tl-event-date {
-        width: 90px;
-        flex-shrink: 0;
-        padding: 16px 12px 0 0;
-        text-align: right;
-    }
-
-    .tl-event-date-wide {
-        width: 130px;
-    }
-
-    .tl-event-date-wide .date-day {
-        font-size: 12px;
-        font-weight: 700;
-        line-height: 1.3;
-    }
-
-    .date-day {
-        font-size: 18px;
-        font-weight: 800;
-        line-height: 1;
-        display: block;
-    }
-
-    .date-month {
-        font-size: 9px;
-        font-weight: 600;
-        text-transform: uppercase;
-        color: var(--text-muted);
-    }
-
-    .tl-event-node {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        width: 20px;
-        padding-top: 18px;
-    }
-
-    .tl-dot {
-        width: 13px;
-        height: 13px;
-        border-radius: 50%;
-        border: 3px solid var(--spine);
-        background: var(--bg);
-    }
-
-    .dot-death {
-        border-color: var(--red-dark);
-        background: var(--red);
-    }
-
-    .dot-case {
-        border-color: var(--red);
-        background: var(--red-light);
-    }
-
-    .dot-departure {
-        border-color: var(--blue);
-        background: var(--blue-light);
-    }
-
-    .dot-action {
-        border-color: var(--amber);
-        background: var(--amber-light);
-    }
-
-    .dot-discovery {
-        border-color: var(--green);
-        background: var(--green-light);
-    }
-
-    .tl-event-content {
-        flex: 1;
-        padding: 10px 0;
-        display: flex;
-    }
-
-    .tl-connector {
-        width: 14px;
-        height: 2px;
-        background: var(--border);
-        margin-top: 14px;
-        flex-shrink: 0;
-    }
-
-    .tl-card {
-        flex: 1;
-        background: var(--bg-card);
-        border: 1px solid var(--border-card);
-        border-radius: 12px;
-        padding: 16px;
-        cursor: pointer;
-        transition: 0.2s;
-        box-shadow: var(--shadow-card);
-        position: relative;
-        overflow: hidden;
-    }
-
-    .tl-card:hover {
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-hover);
-        border-color: var(--text-muted);
-    }
-
-    .tl-card-top {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 12px;
-    }
-
-    .tl-card-title {
-        font-weight: 700;
-        font-size: 15px;
-        color: var(--text-primary);
-    }
-
-    .tl-card-right {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-shrink: 0;
-    }
-
-    .tl-tag {
-        font-size: 9px;
-        font-weight: 700;
-        text-transform: uppercase;
-        padding: 2px 6px;
-        border-radius: 4px;
-    }
-
-    .tag-departure {
-        background: var(--blue-light);
-        color: var(--blue);
-    }
-
-    .tag-death {
-        background: var(--red-light);
-        color: var(--red-dark);
-    }
-
-    .tag-case {
-        background: var(--red-light);
-        color: var(--red);
-    }
-
-    .tag-action {
-        background: var(--amber-light);
-        color: var(--amber);
-    }
-
-    .tag-discovery {
-        background: var(--green-light);
-        color: var(--green);
-    }
-
-    .tl-toggle {
-        font-size: 16px;
-        font-weight: 400;
-        color: var(--text-muted);
-    }
-
-    .tl-card-body {
-        display: none;
-        margin-top: 12px;
-        padding-top: 12px;
-        border-top: 1px solid var(--border);
-        font-size: 13px;
-        color: var(--text-secondary);
-    }
-
-    .tl-card.open .tl-card-body {
-        display: block;
-    }
-
-    .tl-footer {
-        margin-top: 36px;
-        padding: 24px 28px;
-        border-top: 1px solid var(--border);
-        display: flex;
-        justify-content: space-between;
-        font-size: 10px;
-        color: var(--text-muted);
-        text-transform: uppercase;
-    }
-
-    .loader {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 12px;
-        padding: 48px 0;
-    }
-    .loader p {
-        font-size: 12px;
-        margin: 0;
-    }
-    .loader-dots {
-        display: flex;
-        gap: 6px;
-    }
-    .loader-dots span {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: var(--text-muted);
-        animation: dot-pulse 1.2s ease-in-out infinite;
-    }
-    .loader-dots span:nth-child(2) { animation-delay: 0.15s; }
-    .loader-dots span:nth-child(3) { animation-delay: 0.3s; }
-    @keyframes dot-pulse {
-        0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
-        40% { opacity: 1; transform: scale(1); }
-    }
-
-    .state-msg {
-        font-size: 13px;
-        padding: 24px 28px;
-        text-align: center;
-    }
-    .state-msg.error {
-        color: var(--red);
-    }
-
-    @media (max-width: 500px) {
-        .tl-event-date { width: 60px; }
-        .tl-event-node { display: none; }
-        .tl-connector { display: none; }
-        .tl-card-top { flex-direction: column; }
-    }
-</style>
