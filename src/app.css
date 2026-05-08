@@ -121,39 +121,26 @@ html, body {
   letter-spacing: -0.02em;
 }
 
-#my-timeline-container .tl-virus-banner {
-  display: none;
-  width: 100%;
-  height: 200px;
-  overflow: hidden;
-  position: relative;
-  margin-bottom: 15px;
-  border-radius: 6px;
+#my-timeline-container .tl-event-image {
+  margin: 0 0 12px;
 }
 
-#my-timeline-container .tl-card.open .tl-virus-banner {
+#my-timeline-container .tl-event-image-img {
   display: block;
-}
-
-#my-timeline-container .tl-virus-banner-img {
   width: 100%;
-  height: 100%;
+  aspect-ratio: 16 / 9;
   object-fit: cover;
+  border-radius: 8px;
+  background: var(--bg-subtle);
 }
 
-#my-timeline-container .tl-virus-banner-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.4));
-}
-
-#my-timeline-container .tl-virus-caption {
-  position: absolute;
-  bottom: 8px;
-  right: 12px;
-  font-size: 10px;
-  color: #fff;
-  opacity: 0.8;
+#my-timeline-container .tl-event-image-caption {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 
 #my-timeline-container .tl-stats {

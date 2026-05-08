@@ -39,7 +39,7 @@
     };
 
     let activeTypes = $state(new Set(ALL_TYPES));
-    let sortOrder = $state('chrono'); // 'chrono' | 'recent'
+    let sortOrder = $state('recent'); // 'chrono' | 'recent'
 
     function toggleType(type) {
         const next = new Set(activeTypes);
@@ -329,13 +329,12 @@
                                         </div>
                                         <div class="tl-card-body">
                                             {#if ev.Image_url}
-                                                <div class="tl-virus-banner">
-                                                    <img class="tl-virus-banner-img" src={ev.Image_url} alt={ev.Title || ''} />
-                                                    <div class="tl-virus-banner-overlay"></div>
+                                                <figure class="tl-event-image">
+                                                    <img class="tl-event-image-img" src={ev.Image_url} alt={ev.Title || ''} loading="lazy" />
                                                     {#if ev.Image_caption}
-                                                        <span class="tl-virus-caption">{ev.Image_caption}</span>
+                                                        <figcaption class="tl-event-image-caption">{ev.Image_caption}</figcaption>
                                                     {/if}
-                                                </div>
+                                                </figure>
                                             {/if}
                                             {ev.Body || ''}
                                         </div>
