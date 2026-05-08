@@ -121,6 +121,21 @@ html, body {
   letter-spacing: -0.02em;
 }
 
+#my-timeline-container .tl-hint {
+  padding: 8px 28px 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+#my-timeline-container .tl-hint-desktop { display: inline; }
+#my-timeline-container .tl-hint-touch { display: none; }
+
+@media (hover: none), (pointer: coarse) {
+  #my-timeline-container .tl-hint-desktop { display: none; }
+  #my-timeline-container .tl-hint-touch { display: inline; }
+}
+
 #my-timeline-container .tl-event-image {
   margin: 0 0 12px;
 }

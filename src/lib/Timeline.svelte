@@ -287,6 +287,10 @@
         {:else if groupedEvents.length === 0}
             <p class="tl-state-msg">Aucun événement à afficher. Activez au moins une catégorie ci-dessus.</p>
         {:else}
+            <p class="tl-hint">
+                <span class="tl-hint-desktop">Cliquez sur un événement pour en savoir plus.</span>
+                <span class="tl-hint-touch">Touchez un événement pour en savoir plus.</span>
+            </p>
             <div class="tl-body">
                 <div class="tl-timeline">
                     {#each groupedEvents as group}
