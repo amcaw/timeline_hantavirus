@@ -15,16 +15,19 @@
     // used, derived URLs fall back to undefined and their UI hides.
     const STATS_GID = '1860557328';
     const META_GID = '1579613166';
+    const RECAP_GID = '1724016172';
     function withGid(url, gid) {
         if (!url) return null;
         return url.replace(/([?&])gid=\d+/, `$1gid=${gid}`);
     }
     const STATS_CSV_URL = withGid(CSV_URL, STATS_GID);
     const META_CSV_URL = withGid(CSV_URL, META_GID);
+    const RECAP_CSV_URL = withGid(CSV_URL, RECAP_GID);
 
     let events = $state([]);
     let stats = $state([]);
     let lastUpdated = $state('');
+    let recap = $state('');
     let loading = $state(true);
     let error = $state(null);
     let openCards = $state(new Set());
@@ -40,6 +43,9 @@
 
     let activeTypes = $state(new Set(ALL_TYPES));
     let sortOrder = $state('recent'); // 'chrono' | 'recent'
+    let showAll = $state(false);
+    const INITIAL_LIMIT = 10;
+    const PREVIEW_COUNT = 2; // how many faded "next events" peek behind the button
 
     function toggleType(type) {
         const next = new Set(activeTypes);
@@ -51,6 +57,11 @@
 
     function setSort(order) {
         sortOrder = order;
+        setTimeout(() => sendHeight(), 60);
+    }
+
+    function toggleShowAll() {
+        showAll = !showAll;
         setTimeout(() => sendHeight(), 60);
     }
 
@@ -136,7 +147,7 @@
             return activeTypes.has(t);
         });
 
-        const enrichedList = filtered.map(ev => {
+        const enrichedList = filtered.map((ev, csvIndex) => {
             const start = parseDate(ev.Start_date);
             const end = parseDate(ev.End_date);
             const display = buildDateDisplay(start, end);
@@ -145,18 +156,33 @@
                 ...ev,
                 _start: start,
                 _sortKey: sortKey,
+                _csvIndex: csvIndex,
                 _dayDisplay: display.day,
                 _monthDisplay: display.month
             };
         });
 
-        enrichedList.sort((a, b) => sortOrder === 'recent' ? b._sortKey - a._sortKey : a._sortKey - b._sortKey);
+        // Same-date events: in 'recent' mode the *last* CSV row should be
+        // on top (newest entry wins), in 'chrono' it stays in CSV order.
+        enrichedList.sort((a, b) => {
+            if (a._sortKey !== b._sortKey) {
+                return sortOrder === 'recent' ? b._sortKey - a._sortKey : a._sortKey - b._sortKey;
+            }
+            return sortOrder === 'recent' ? b._csvIndex - a._csvIndex : a._csvIndex - b._csvIndex;
+        });
+
+        const visibleCount = showAll ? enrichedList.length : Math.min(enrichedList.length, INITIAL_LIMIT + PREVIEW_COUNT);
+        const visibleList = enrichedList.slice(0, visibleCount);
 
         const groups = [];
         let currentLabel = null;
         let currentList = null;
-        for (const ev of enrichedList) {
+        for (let idx = 0; idx < visibleList.length; idx++) {
+            const ev = visibleList[idx];
             const label = ev._start ? `${MONTHS_FR[ev._start.month - 1]} ${ev._start.year}` : '';
+            // Mark preview events (the faded "peek" rows behind the button).
+            // Only when collapsed AND past the initial limit.
+            ev._previewRank = !showAll && idx >= INITIAL_LIMIT ? idx - INITIAL_LIMIT + 1 : 0;
             if (label !== currentLabel) {
                 currentLabel = label;
                 currentList = [];
@@ -164,7 +190,7 @@
             }
             currentList.push(ev);
         }
-        return groups;
+        return { groups, total: enrichedList.length, visible: visibleList.length };
     });
 
     async function fetchCSV(url) {
@@ -175,15 +201,18 @@
 
     onMount(async () => {
         try {
-            const [eventsRows, statsRows, metaRows] = await Promise.all([
+            const [eventsRows, statsRows, metaRows, recapRows] = await Promise.all([
                 fetchCSV(CSV_URL),
                 STATS_CSV_URL ? fetchCSV(STATS_CSV_URL) : Promise.resolve([]),
-                META_CSV_URL ? fetchCSV(META_CSV_URL) : Promise.resolve([])
+                META_CSV_URL ? fetchCSV(META_CSV_URL) : Promise.resolve([]),
+                RECAP_CSV_URL ? fetchCSV(RECAP_CSV_URL) : Promise.resolve([])
             ]);
             events = eventsRows;
             stats = statsRows;
             const updatedRow = metaRows.find(r => (r.Key || '').toLowerCase() === 'last_updated');
             if (updatedRow) lastUpdated = updatedRow.Value || '';
+            const recapRow = recapRows.find(r => r.Le_Recap);
+            if (recapRow) recap = recapRow.Le_Recap;
         } catch (e) {
             error = e.message;
         } finally {
@@ -241,6 +270,10 @@
             </div>
         {/if}
 
+        {#if recap}
+            <p class="tl-recap">{@html recap}</p>
+        {/if}
+
         <div class="tl-controls">
             <div class="tl-control-row">
                 <span class="tl-control-label">Filtrer les catégories&nbsp;:</span>
@@ -284,16 +317,16 @@
             </div>
         {:else if error}
             <p class="tl-state-msg error">Erreur : {error}</p>
-        {:else if groupedEvents.length === 0}
+        {:else if groupedEvents.total === 0}
             <p class="tl-state-msg">Aucun événement à afficher. Activez au moins une catégorie ci-dessus.</p>
         {:else}
             <p class="tl-hint">
                 <span class="tl-hint-desktop">Cliquez sur un événement pour en savoir plus.</span>
                 <span class="tl-hint-touch">Touchez un événement pour en savoir plus.</span>
             </p>
-            <div class="tl-body">
+            <div class="tl-body {!showAll && groupedEvents.total > INITIAL_LIMIT ? 'tl-body-collapsed' : ''}">
                 <div class="tl-timeline">
-                    {#each groupedEvents as group}
+                    {#each groupedEvents.groups as group}
                         {#if group.label}
                             <div class="tl-month">
                                 <span class="tl-month-label">{group.label}</span>
@@ -303,7 +336,7 @@
                         {#each group.items as ev, i (ev.Title + '|' + ev.Start_date + '|' + i)}
                             {@const key = ev.Title + '|' + ev.Start_date}
                             {@const open = openCards.has(key)}
-                            <div class="tl-event">
+                            <div class="tl-event {ev._previewRank ? 'tl-event-preview tl-event-preview-' + ev._previewRank : ''}">
                                 <div class="tl-event-date {!ev._monthDisplay ? 'tl-event-date-wide' : ''}">
                                     <span class="date-day">{@html ev._dayDisplay}</span>
                                     {#if ev._monthDisplay}
@@ -340,7 +373,7 @@
                                                     {/if}
                                                 </figure>
                                             {/if}
-                                            {ev.Body || ''}
+                                            {@html ev.Body || ''}
                                         </div>
                                     </div>
                                 </div>
@@ -348,6 +381,17 @@
                         {/each}
                     {/each}
                 </div>
+                {#if groupedEvents.total > INITIAL_LIMIT}
+                    <div class="tl-show-more {!showAll ? 'tl-show-more-overlay' : ''}">
+                        <button type="button" class="tl-show-more-btn" onclick={toggleShowAll}>
+                            {#if showAll}
+                                Voir seulement les {INITIAL_LIMIT} premiers
+                            {:else}
+                                Voir tous les événements ({groupedEvents.total})
+                            {/if}
+                        </button>
+                    </div>
+                {/if}
             </div>
         {/if}
 

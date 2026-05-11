@@ -217,6 +217,78 @@ html, body {
   color: var(--red);
 }
 
+/* Collapsed state: the body becomes a positioning context so the
+   gradient + button can overlay the last few preview events. */
+#my-timeline-container .tl-body-collapsed {
+  position: relative;
+}
+
+/* Disable interaction on preview events so users go through the
+   button instead of accidentally opening a faded card. */
+#my-timeline-container .tl-event-preview {
+  pointer-events: none;
+}
+#my-timeline-container .tl-event-preview .tl-card {
+  cursor: default;
+}
+
+/* Default (expanded) state: button is a regular centred row below. */
+#my-timeline-container .tl-show-more {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+/* Collapsed state: button sits on a gradient that fades the preview
+   events behind it, pinned to the bottom of the timeline body. */
+#my-timeline-container .tl-show-more-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin-top: 0;
+  padding-top: 180px;
+  padding-bottom: 16px;
+  background: linear-gradient(to bottom, transparent 0%, var(--bg) 60%);
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  pointer-events: none;
+  z-index: 2;
+}
+
+#my-timeline-container .tl-show-more-btn {
+  padding: 10px 22px;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: 0.15s;
+  box-shadow: var(--shadow-card);
+  pointer-events: auto;
+}
+
+#my-timeline-container .tl-show-more-btn:hover {
+  border-color: var(--text-muted);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-hover);
+}
+
+#my-timeline-container .tl-recap {
+  margin: 24px 0 0;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+
+#my-timeline-container .tl-recap strong { font-weight: 700; }
+#my-timeline-container .tl-recap em { font-style: italic; }
+#my-timeline-container .tl-recap a { color: var(--red); text-decoration: underline; }
+
 #my-timeline-container .tl-controls {
   display: flex;
   flex-direction: column;
