@@ -396,7 +396,7 @@
         {/if}
 
         <div class="tl-footer">
-            <span>Sources : OMS · Min. Santé (Argentine, SA)</span>
+            <span>Sources : OMS · AFP · Belga</span>
             {#if lastUpdated}
                 <span>Dernière mise à jour : {lastUpdated}</span>
             {/if}
